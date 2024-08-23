@@ -63,12 +63,11 @@ func (c *server) Create(ctx context.Context, req *desc.CreateRequest) (*desc.Cre
 	role := req.GetRole()
 
 	if email == "" || name == "" || pass == "" || passConf == "" || role > 1 {
-		log.Fatal("not enough data for fields")
+		return &desc.CreateResponse{}, errors.New("not enough data for fields")
 	}
-	// Id := req.GetId()
 
 	if pass != passConf {
-		log.Fatal("passwords don't match")
+		return &desc.CreateResponse{}, errors.New("passwords don't match")
 	}
 
 	builderInsert := sq.Insert("users").
@@ -79,7 +78,7 @@ func (c *server) Create(ctx context.Context, req *desc.CreateRequest) (*desc.Cre
 			"password",
 			"role",
 		).
-		Values(name, email, pass, role).Suffix("RETURNING ID")
+		Values(name, email, pass, role)
 
 	query, args, err := builderInsert.ToSql()
 
@@ -87,17 +86,16 @@ func (c *server) Create(ctx context.Context, req *desc.CreateRequest) (*desc.Cre
 		log.Fatalf("cannot create query %v", err)
 	}
 
-	var userID int64
-	err = pool.QueryRow(ctx, query, args...).Scan(&userID)
+	_, err = pool.Query(ctx, query, args...)
 
 	if err != nil {
 		log.Fatalf("failed to insert user: %v", err)
 	}
 
-	log.Printf("inserted user with id: %d", userID)
+	log.Printf("inserted user with name: %v", name)
 
 	return &desc.CreateResponse{
-		Id: userID,
+		Id: 1,
 	}, nil
 }
 
@@ -112,18 +110,18 @@ func initDb() {
 	ctx := context.Background()
 	dsn := os.Getenv("PG_DSN")
 
-	pool, err := pgxpool.Connect(ctx, dsn)
+	var err error
+	pool, err = pgxpool.Connect(ctx, dsn)
 
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
-
-	defer pool.Close()
 }
 
 func main() {
 	initEnv()
 	initDb()
+	defer pool.Close()
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
 
