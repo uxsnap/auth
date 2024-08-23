@@ -55,6 +55,52 @@ func (c *server) Get(ctx context.Context, req *desc.GetRequest) (*desc.GetRespon
 	return &resp, nil
 }
 
+func (c *server) Create(ctx context.Context, req *desc.CreateRequest) (*desc.CreateResponse, error) {
+	email := req.GetEmail()
+	name := req.GetName()
+	pass := req.GetPassword()
+	passConf := req.GetPasswordConfirm()
+	role := req.GetRole()
+
+	if email == "" || name == "" || pass == "" || passConf == "" || role > 1 {
+		log.Fatal("not enough data for fields")
+	}
+	// Id := req.GetId()
+
+	if pass != passConf {
+		log.Fatal("passwords don't match")
+	}
+
+	builderInsert := sq.Insert("users").
+		PlaceholderFormat(sq.Dollar).
+		Columns(
+			"name",
+			"email",
+			"password",
+			"role",
+		).
+		Values(name, email, pass, role).Suffix("RETURNING ID")
+
+	query, args, err := builderInsert.ToSql()
+
+	if err != nil {
+		log.Fatalf("cannot create query %v", err)
+	}
+
+	var userID int64
+	err = pool.QueryRow(ctx, query, args...).Scan(&userID)
+
+	if err != nil {
+		log.Fatalf("failed to insert user: %v", err)
+	}
+
+	log.Printf("inserted user with id: %d", userID)
+
+	return &desc.CreateResponse{
+		Id: userID,
+	}, nil
+}
+
 func initEnv() {
 	err := godotenv.Load()
 	if err != nil {
